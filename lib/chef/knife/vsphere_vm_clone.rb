@@ -448,7 +448,9 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
     bootstrap.config[:chef_node_name] = get_config(:chef_node_name)
     bootstrap.config[:prerelease] = get_config(:prerelease)
     bootstrap.config[:bootstrap_version] = get_config(:bootstrap_version)
-    bootstrap.config[:distro] = get_config(:distro)
+    if get_config(:distro)
+      bootstrap.config[:distro] = get_config(:distro)
+    end
     bootstrap.config[:use_sudo] = true unless get_config(:ssh_user) == 'root'
     bootstrap.config[:template_file] = get_config(:template_file)
     bootstrap.config[:environment] = get_config(:environment)
