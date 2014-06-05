@@ -18,7 +18,6 @@ require 'chef/knife/winrm_base'
 #     --cips 192.168.0.99/24,192.168.1.99/24 \
 #     --chostname NODENAME --cdomain NODEDOMAIN
 class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
-
   include Chef::Knife::WinrmBase
   deps do
     require 'winrm'
@@ -468,7 +467,7 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
     unless get_config(:disable_customization)
       use_ident = !config[:customization_hostname].nil? || !get_config(:customization_domain).nil? || cust_spec.identity.nil?
     end //TODO: remove this and make the below inside the unless block
-    
+
     if use_ident
       if get_config(:distro) == "windows"
         identification = RbVmomi::VIM.CustomizationIdentification(
@@ -514,28 +513,18 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
           ident.hostName.name = config[:vmname]
         end
   
-        if src_config.guestId.downcase.include?("windows")
-          if cust_spec.identity.nil?
-            fatal_exit("Please provide Windows Guest Customization")
-          else
-            cust_spec.identity.userData.computerName = RbVmomi::VIM.CustomizationFixedName(:name => hostname)
-          end
+        if get_config(:customization_domain)
+          ident.domain = get_config(:customization_domain)
         else
-          ident = RbVmomi::VIM.CustomizationLinuxPrep
-          ident.hostName = RbVmomi::VIM.CustomizationFixedName(:name => hostname)
-          if get_config(:customization_domain)
-            ident.domain = get_config(:customization_domain)
-          else
-            ident.domain = ''
-          end
-          cust_spec.identity = ident
+          ident.domain = ''
         end
+        cust_spec.identity = ident
       end
-      clone_spec.customization = cust_spec
+    end
+    clone_spec.customization = cust_spec
 
-      if customization_plugin && customization_plugin.respond_to?(:customize_clone_spec)
-        clone_spec = customization_plugin.customize_clone_spec(src_config, clone_spec)
-      end
+    if customization_plugin && customization_plugin.respond_to?(:customize_clone_spec)
+      clone_spec = customization_plugin.customize_clone_spec(src_config, clone_spec)
     end
     clone_spec
   end
@@ -627,7 +616,7 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
       bootstrap.config[:environment] = get_config(:environment)
     bootstrap
   end
-
+  
   def bootstrap_for_node()
     Chef::Knife::Bootstrap.load_deps
     bootstrap = Chef::Knife::Bootstrap.new
