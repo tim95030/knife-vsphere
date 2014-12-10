@@ -141,12 +141,14 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
   option :bootstrap_protocol,
          :long => "--bootstrap-protocol protocol",
          :description => "Protocol to bootstrap windows servers. options: winrm/ssh",
-         :default => "ssh"
+         :proc => Proc.new { |key| Chef::Config[:knife][:bootstrap_protocol] = key },
+         :default => nil
 
   option :winrm_user,
          :short => "-x USERNAME",
          :long => "--winrm-user USERNAME",
-         :description => "The winrm username"
+         :description => "The winrm username",
+         :default => "Administrator"
 
   option :winrm_password,
          :short => "-P PASSWORD",
@@ -156,14 +158,14 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
   option :winrm_port,
          :short => "-p PORT",
          :long => "--winrm-port PORT",
-         :description => "The winrm port"
-  $default[:winrm_port] = 5985
+         :description => "The winrm port",
+         :default => 5985
 
   option :ssh_user,
          :short => "-x USERNAME",
          :long => "--ssh-user USERNAME",
-         :description => "The ssh username"
-  $default[:ssh_user] = "root"
+         :description => "The ssh username",
+         :default => "root"
 
   option :ssh_password,
          :short => "-P PASSWORD",
@@ -173,8 +175,8 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
   option :ssh_port,
          :short => "-p PORT",
          :long => "--ssh-port PORT",
-         :description => "The ssh port"
-  $default[:ssh_port] = 22
+         :description => "The ssh port",
+         :default => 22
 
   option :identity_file,
          :short => "-i IDENTITY_FILE",
@@ -204,7 +206,9 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
   option :distro,
          :short => "-d DISTRO",
          :long => "--distro DISTRO",
-         :description => "Bootstrap a distro using a template"
+         :description => "Bootstrap a distro using a template; default is 'chef-full'",
+         :proc => Proc.new { |d| Chef::Config[:knife][:distro] = d },
+         :default => "chef-full"
 
   option :template_file,
          :long => "--template-file TEMPLATE",
@@ -213,13 +217,13 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
   option :run_list,
          :short => "-r RUN_LIST",
          :long => "--run-list RUN_LIST",
-         :description => "Comma separated list of roles/recipes to apply"
-  $default[:run_list] = ''
+         :description => "Comma separated list of roles/recipes to apply",
+         :proc => lambda { |o| o.split(/[\s,]+/) }
 
   option :secret_file,
          :long => "--secret-file SECRET_FILE",
-         :description => "A file containing the secret key to use to encrypt data bag item values"
-  $default[:secret_file] = ''
+         :description => "A file containing the secret key to use to encrypt data bag item values",
+         :default => ''
 
   option :hint,
          :long => "--hint HINT_NAME[=HINT_FILE]",
@@ -227,8 +231,8 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
          :proc => Proc.new { |h|
            Chef::Config[:knife][:hints] ||= Hash.new
            name, path = h.split("=")
-           Chef::Config[:knife][:hints][name] = path ? JSON.parse(::File.read(path)) : Hash.new  }
-  $default[:hint] = ''
+           Chef::Config[:knife][:hints][name] = path ? JSON.parse(::File.read(path)) : Hash.new  },
+         :default => ''
 
   option :no_host_key_verify,
          :long => "--no-host-key-verify",
