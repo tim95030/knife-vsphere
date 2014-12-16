@@ -668,38 +668,43 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
     bootstrap
   end
 
-  def tcp_test_ssh(hostname)
-    tcp_socket = TCPSocket.new(hostname, get_config(:ssh_port))
+  def tcp_test_ssh(hostname, ssh_port)
+    tcp_socket = TCPSocket.new(hostname, ssh_port)
     readable = IO.select([tcp_socket], nil, nil, 5)
     if readable
-      Chef::Log.debug("sshd accepting connections on #{hostname}, banner is #{tcp_socket.gets}")
-      true
+      ssh_banner = tcp_socket.gets
+      if ssh_banner.nil? or ssh_banner.empty?
+        false
+      else
+        Chef::Log.debug("sshd accepting connections on #{hostname}, banner is #{ssh_banner}")
+        yield
+        true
+      end
     else
       false
     end
-  rescue Errno::ETIMEDOUT
-    false
-  rescue Errno::EPERM
-    false
-  rescue Errno::ECONNREFUSED
+  rescue SocketError, Errno::ECONNREFUSED, Errno::EHOSTUNREACH, Errno::ENETUNREACH, IOError
+    Chef::Log.debug("ssh failed to connect: #{hostname}")
     sleep 2
     false
-  rescue Errno::EHOSTUNREACH, Errno::ENETUNREACH
+  rescue Errno::EPERM, Errno::ETIMEDOUT
+    Chef::Log.debug("ssh timed out: #{hostname}")
+    false
+  rescue Errno::ECONNRESET
+    Chef::Log.debug("ssh reset its connection: #{hostname}")
     sleep 2
     false
   ensure
     tcp_socket && tcp_socket.close
   end
 
-  def tcp_test_winrm(hostname)
-    tcp_socket = TCPSocket.new(hostname, get_config(:winrm_port))
-    readable = IO.select([tcp_socket], nil, nil, 5)
-    if readable
-      Chef::Log.debug("winrm accepting connections on #{hostname}, banner is #{tcp_socket.gets}")
-      true
-    else
-      false
-    end
+  def tcp_test_winrm(hostname, port)
+    tcp_socket = TCPSocket.new(hostname, port)
+    yield
+    true
+  rescue SocketError
+    sleep 2
+    false
   rescue Errno::ETIMEDOUT
     false
   rescue Errno::EPERM
@@ -707,7 +712,10 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
   rescue Errno::ECONNREFUSED
     sleep 2
     false
-  rescue Errno::EHOSTUNREACH, Errno::ENETUNREACH
+  rescue Errno::EHOSTUNREACH
+    sleep 2
+    false
+  rescue Errno::ENETUNREACH
     sleep 2
     false
   ensure
