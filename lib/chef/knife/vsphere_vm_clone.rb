@@ -20,13 +20,8 @@ require 'chef/knife/winrm_base'
 class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
   include Chef::Knife::WinrmBase
   deps do
-    require 'winrm'
-    require 'em-winrm'
     require 'chef/json_compat'
     require 'chef/knife/bootstrap'
-    require 'chef/knife/bootstrap_windows_winrm'
-    require 'chef/knife/core/windows_bootstrap_context'
-    require 'chef/knife/winrm'
     Chef::Knife::Bootstrap.load_deps
   end
 
@@ -307,27 +302,58 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
 
 
       if get_config(:bootstrap)
-      @bootstrap_protocol = get_config(:bootstrap_protocol)
-        if @bootstrap_protocol == 'ssh'
-          sleep 2 until vm.guest.ipAddress
-          config[:fqdn] = vm.guest.ipAddress unless config[:fqdn]
-          print "\n#{ui.color("Waiting for sshd", :magenta)}"
-          print(".") until tcp_test_ssh(config[:fqdn]) {
-            sleep BOOTSTRAP_DELAY
-            puts "\n"
+        sleep 2 until vm.guest.ipAddress
+        connect_host = config[:fqdn] = config[:fqdn] ? get_config(:fqdn) : vm.guest.ipAddress
+        Chef::Log.debug("Connect Host for Bootstrap: #{connect_host}")
+        connect_port = get_config(:ssh_port)
+        if is_windows?(src_vm.config)
+          protocol = get_config(:bootstrap_protocol)
+          protocol ||= 'winrm'
+          # Set distro to windows-chef-client-msi
+          config[:distro] = "windows-chef-client-msi" if (config[:distro].nil? || config[:distro] == "chef-full")
+          wait_for_access(connect_host, connect_port, protocol)
+          Chef::Log.debug("Restarting Box for Windows Customization to finish.")
+          vm.ShutdownGuest
+          print "Waiting for virtual machine #{vmname} to shut down..."
+          until vm.runtime.powerState == PsOff do
+            sleep 2
+            print "."
+          end
+          puts "done"
+          vm.PowerOnVM_Task.wait_for_completion
+          puts "Restarted virtual machine #{vmname}"
+          wait_for_access(connect_host, connect_port, protocol)
+          bootstrap_for_windows_node.run
+        else
+          print "\n#{ui.color("Waiting for sshd access to become available", :magenta)}"
+          print(".") until tcp_test_ssh(connect_host, connect_port) {
+            sleep 10
+            puts("done")
           }
           bootstrap_for_node.run
-        else
-          sleep 2 until vm.guest.ipAddress
-          print "\n#{ui.color("Waiting for winrm to be active", :magenta)}"
-          print(".") until tcp_test_winrm(config[:fqdn]) {
-            sleep WINRM_BOOTSTRAP_DELAY
-            puts("\n")
-          }
-          bootstrap_for_windows_node.run
         end
       end
     end
+  end
+
+  def wait_for_access(connect_host, connect_port, protocol)
+    if protocol == 'winrm'
+      load_winrm_deps
+      connect_port = get_config(:winrm_port)
+      print "\n#{ui.color("Waiting for winrm access to become available", :magenta)}"
+      print(".") until tcp_test_winrm(connect_host, connect_port) {
+        sleep 10
+        puts("done")
+      }
+    else
+      print "\n#{ui.color("Waiting for sshd access to become available", :magenta)}"
+      #If FreeSSHd, winsshd etc are available
+      print(".") until tcp_test_ssh(connect_host, connect_port) {
+        sleep 10
+        puts("done")
+      }
+    end
+    connect_port
   end
 
   def create_delta_disk(src_vm)
@@ -675,5 +701,14 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
     false
   ensure
     tcp_socket && tcp_socket.close
+  end
+
+  def load_winrm_deps
+    require 'winrm'
+    require 'em-winrm'
+    require 'chef/knife/winrm'
+    require 'chef/knife/bootstrap_windows_winrm'
+    require 'chef/knife/bootstrap_windows_ssh'
+    require 'chef/knife/core/windows_bootstrap_context'
   end
 end
