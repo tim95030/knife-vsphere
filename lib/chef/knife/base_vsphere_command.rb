@@ -363,6 +363,24 @@ class Chef
         tcp_socket && tcp_socket.close
       end
 
+      def is_windows?(config)
+        is_win_bool = config.guestId.downcase.include?("windows")
+        if is_win_bool
+          Chef::Log.debug("Identified os as windows.")
+        end
+        return is_win_bool
+      end
+
+      def is_linux?(config)
+        gid = config.guestId.downcase
+        # This makes the assumption that if it isn't mac or windows it's linux
+        is_linux_bool = !gid.include?("windows") && !gid.include?("darwin")
+        if is_linux_bool
+          Chef::Log.debug("Identified os as linux.")
+        end
+        return is_linux_bool
+      end
+
     end
   end
 end
