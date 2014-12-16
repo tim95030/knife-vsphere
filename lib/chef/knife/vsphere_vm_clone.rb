@@ -274,10 +274,6 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
     config[:chef_node_name] = vmname unless config[:chef_node_name]
     config[:vmname] = vmname
 
-    if get_config(:bootstrap) && get_config(:distro) && !@@chef_config_dir
-      fatal_exit("Can't find .chef for bootstrap files. chdir to a location with a .chef directory and try again")
-    end
-
     vim = get_vim_connection
     vdm = vim.serviceContent.virtualDiskManager
 
