@@ -481,65 +481,67 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
 
     unless get_config(:disable_customization)
       use_ident = !config[:customization_hostname].nil? || !get_config(:customization_domain).nil? || cust_spec.identity.nil?
-    end
 
-    if use_ident
-      if get_config(:distro) == "windows"
-        identification = RbVmomi::VIM.CustomizationIdentification(
-          :joinWorkgroup => cust_spec.identity.identification.joinWorkgroup
-        )
-        licenseFilePrintData = RbVmomi::VIM.CustomizationLicenseFilePrintData(
-          :autoMode => cust_spec.identity.licenseFilePrintData.autoMode
-        )
+      if use_ident
+        if is_windows?(src_config)
+          identification = RbVmomi::VIM.CustomizationIdentification(
+            :joinWorkgroup => cust_spec.identity.identification.joinWorkgroup
+          )
+          licenseFilePrintData = RbVmomi::VIM.CustomizationLicenseFilePrintData(
+            :autoMode => cust_spec.identity.licenseFilePrintData.autoMode
+          )
 
-        userData = RbVmomi::VIM.CustomizationUserData(
-          :fullName => cust_spec.identity.userData.fullName,
-          :orgName => cust_spec.identity.userData.orgName,
-          :productId => cust_spec.identity.userData.productId,
-          :computerName => cust_spec.identity.userData.computerName
-        )
-        guiUnattended = RbVmomi::VIM.CustomizationGuiUnattended(
-          :autoLogon => cust_spec.identity.guiUnattended.autoLogon,
-          :autoLogonCount => cust_spec.identity.guiUnattended.autoLogonCount,
-          :password => RbVmomi::VIM.CustomizationPassword(
-            :plainText => cust_spec.identity.guiUnattended.password.plainText,
-            :value => cust_spec.identity.guiUnattended.password.value
-          ),
-          :timeZone => cust_spec.identity.guiUnattended.timeZone
-        )
-        runonce = RbVmomi::VIM.CustomizationGuiRunOnce(
-          :commandList => ['cust_spec.identity.guiUnattended.commandList']
-        )
-        ident = RbVmomi::VIM.CustomizationSysprep
-        ident.guiRunOnce = runonce
-        ident.guiUnattended = guiUnattended
-        ident.identification = identification
-        ident.licenseFilePrintData = licenseFilePrintData
-        ident.userData = userData
-        cust_spec.identity = ident
-      else
-        # TODO - verify that we're deploying a linux spec, at least warn
-        ident = RbVmomi::VIM.CustomizationLinuxPrep
-        
-        ident.hostName = RbVmomi::VIM.CustomizationFixedName
-        if config[:customization_hostname]
-          ident.hostName.name = config[:customization_hostname]
+          userData = RbVmomi::VIM.CustomizationUserData(
+            :fullName => cust_spec.identity.userData.fullName,
+            :orgName => cust_spec.identity.userData.orgName,
+            :productId => cust_spec.identity.userData.productId,
+            :computerName => cust_spec.identity.userData.computerName
+          )
+          guiUnattended = RbVmomi::VIM.CustomizationGuiUnattended(
+            :autoLogon => cust_spec.identity.guiUnattended.autoLogon,
+            :autoLogonCount => cust_spec.identity.guiUnattended.autoLogonCount,
+            :password => RbVmomi::VIM.CustomizationPassword(
+              :plainText => cust_spec.identity.guiUnattended.password.plainText,
+              :value => cust_spec.identity.guiUnattended.password.value
+            ),
+            :timeZone => cust_spec.identity.guiUnattended.timeZone
+          )
+          runonce = RbVmomi::VIM.CustomizationGuiRunOnce(
+            :commandList => ['cust_spec.identity.guiUnattended.commandList']
+          )
+          ident = RbVmomi::VIM.CustomizationSysprep
+          ident.guiRunOnce = runonce
+          ident.guiUnattended = guiUnattended
+          ident.identification = identification
+          ident.licenseFilePrintData = licenseFilePrintData
+          ident.userData = userData
+          cust_spec.identity = ident
+        elsif is_linux?(src_config)
+          ident = RbVmomi::VIM.CustomizationLinuxPrep
+
+          ident.hostName = RbVmomi::VIM.CustomizationFixedName
+          if config[:customization_hostname]
+            ident.hostName.name = config[:customization_hostname]
+          else
+            ident.hostName.name = config[:vmname]
+          end
+
+          if get_config(:customization_domain)
+            ident.domain = get_config(:customization_domain)
+          else
+            ident.domain = ''
+          end
+          cust_spec.identity = ident
         else
-          ident.hostName.name = config[:vmname]
+          ui.error("Customization only supports Linux and Windows currently.")
+          exit 1
         end
-  
-        if get_config(:customization_domain)
-          ident.domain = get_config(:customization_domain)
-        else
-          ident.domain = ''
-        end
-        cust_spec.identity = ident
       end
-    end
-    clone_spec.customization = cust_spec
+      clone_spec.customization = cust_spec
 
-    if customization_plugin && customization_plugin.respond_to?(:customize_clone_spec)
-      clone_spec = customization_plugin.customize_clone_spec(src_config, clone_spec)
+      if customization_plugin && customization_plugin.respond_to?(:customize_clone_spec)
+        clone_spec = customization_plugin.customize_clone_spec(src_config, clone_spec)
+      end
     end
     clone_spec
   end
