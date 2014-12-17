@@ -306,8 +306,8 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
         connect_host = config[:fqdn] = config[:fqdn] ? get_config(:fqdn) : vm.guest.ipAddress
         Chef::Log.debug("Connect Host for Bootstrap: #{connect_host}")
         connect_port = get_config(:ssh_port)
+        protocol = get_config(:bootstrap_protocol)
         if is_windows?(src_vm.config)
-          protocol = get_config(:bootstrap_protocol)
           protocol ||= 'winrm'
           # Set distro to windows-chef-client-msi
           config[:distro] = "windows-chef-client-msi" if (config[:distro].nil? || config[:distro] == "chef-full")
@@ -323,13 +323,12 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
           vm.PowerOnVM_Task.wait_for_completion
           puts "Restarted virtual machine #{vmname}"
           wait_for_access(connect_host, connect_port, protocol)
+          ssh_override_winrm
           bootstrap_for_windows_node.run
         else
-          print "\n#{ui.color("Waiting for sshd access to become available", :magenta)}"
-          print(".") until tcp_test_ssh(connect_host, connect_port) {
-            sleep 10
-            puts("done")
-          }
+          protocol ||= 'ssh'
+          wait_for_access(connect_host, connect_port, protocol)
+          ssh_override_winrm
           bootstrap_for_node.run
         end
       end
@@ -662,6 +661,24 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
     bootstrap.config[:use_sudo] = true unless get_config(:ssh_user) == 'root'
     bootstrap.config[:log_level] = get_config(:log_level)
     bootstrap_common_params(bootstrap)
+  end
+
+  def ssh_override_winrm
+    # unchanged ssh_user and changed winrm_user, override ssh_user
+    if get_config(:ssh_user).eql?(options[:ssh_user][:default]) &&
+        !get_config(:winrm_user).eql?(options[:winrm_user][:default])
+      config[:ssh_user] = get_config(:winrm_user)
+    end
+    # unchanged ssh_port and changed winrm_port, override ssh_port
+    if get_config(:ssh_port).eql?(options[:ssh_port][:default]) &&
+        !get_config(:winrm_port).eql?(options[:winrm_port][:default])
+      config[:ssh_port] = get_config(:winrm_port)
+    end
+    # unset ssh_password and set winrm_password, override ssh_password
+    if get_config(:ssh_password).nil? &&
+        !get_config(:winrm_password).nil?
+      config[:ssh_password] = get_config(:winrm_password)
+    end
   end
 
   def tcp_test_ssh(hostname, ssh_port)
