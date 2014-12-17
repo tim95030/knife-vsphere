@@ -22,6 +22,11 @@ class Chef::Knife::VsphereVmDelete < Chef::Knife::BaseVsphereCommand
          :boolean => true,
          :description => "Destroy corresponding node and client on the Chef Server, in addition to destroying the VM itself."
 
+  option :chef_node_name,
+         :short => "-N NAME",
+         :long => "--node-name NAME",
+         :description => "The Chef node name for your new node"
+
   get_common_options
 
   # Extracted from Chef::Knife.delete_object, because it has a
@@ -45,6 +50,8 @@ class Chef::Knife::VsphereVmDelete < Chef::Knife::BaseVsphereCommand
       fatal_exit("You must specify a virtual machine name")
     end
 
+    config[:chef_node_name] = vmname unless get_config(:chef_node_name)
+
     vim = get_vim_connection
 
     baseFolder = find_folder(get_config(:folder));
@@ -57,8 +64,8 @@ class Chef::Knife::VsphereVmDelete < Chef::Knife::BaseVsphereCommand
     puts "Deleted virtual machine #{vmname}"
 
     if config[:purge]
-      destroy_item(Chef::Node, vmname, "node")
-      destroy_item(Chef::ApiClient, vmname, "client")
+      destroy_item(Chef::Node, config[:chef_node_name], "node")
+      destroy_item(Chef::ApiClient, config[:chef_node_name], "client")
     else
       puts "Corresponding node and client for the #{vmname} server were not deleted and remain registered with the Chef Server"
     end
