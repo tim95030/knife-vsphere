@@ -131,23 +131,6 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
          :proc => Proc.new { |key| Chef::Config[:knife][:bootstrap_protocol] = key },
          :default => nil
 
-  option :winrm_user,
-         :short => "-x USERNAME",
-         :long => "--winrm-user USERNAME",
-         :description => "The winrm username",
-         :default => "Administrator"
-
-  option :winrm_password,
-         :short => "-P PASSWORD",
-         :long => "--winrm-password PASSWORD",
-         :description => "The winrm password"
-
-  option :winrm_port,
-         :short => "-p PORT",
-         :long => "--winrm-port PORT",
-         :description => "The winrm port",
-         :default => 5985
-
   option :ssh_user,
          :short => "-x USERNAME",
          :long => "--ssh-user USERNAME",
