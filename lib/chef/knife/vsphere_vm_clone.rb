@@ -266,7 +266,7 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
       show_usage
       fatal_exit("You must specify a virtual machine name")
     end
-    config[:chef_node_name] = vmname unless config[:chef_node_name]
+    config[:chef_node_name] = vmname unless get_config(:chef_node_name)
     config[:vmname] = vmname
 
     vim = get_vim_connection
@@ -653,9 +653,8 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
       bootstrap.config[:ssh_user] = get_config(:ssh_user)
       bootstrap.config[:ssh_password] = get_config(:ssh_password)
       bootstrap.config[:ssh_port] = get_config(:ssh_port)
-      bootstrap.config[:identity_file] = get_config(:identity_file)
     else
-      ui.error("Unsupported Bootstrapping Protocol. Supporte : winrm, ssh")
+      ui.error("Unsupported Bootstrapping Protocol. Supports : winrm, ssh")
       exit 1
     end
     bootstrap_common_params(bootstrap)
@@ -668,7 +667,7 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
     bootstrap.config[:ssh_user] = get_config(:ssh_user)
     bootstrap.config[:ssh_password] = get_config(:ssh_password)
     bootstrap.config[:ssh_port] = get_config(:ssh_port)
-    bootstrap.config[:identity_file] = get_config(:identity_file)
+    bootstrap.config[:identity_file] = config[:identity_file]
     bootstrap.config[:use_sudo] = true unless get_config(:ssh_user) == 'root'
     bootstrap.config[:log_level] = get_config(:log_level)
     bootstrap_common_params(bootstrap)
@@ -689,6 +688,11 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
     if get_config(:ssh_password).nil? &&
         !get_config(:winrm_password).nil?
       config[:ssh_password] = get_config(:winrm_password)
+    end
+    # unset identity_file and set kerberos_keytab_file, override identity_file
+    if get_config(:identity_file).nil? &&
+        !get_config(:kerberos_keytab_file).nil?
+      config[:identity_file] = get_config(:kerberos_keytab_file)
     end
   end
 
