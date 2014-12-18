@@ -303,17 +303,15 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
           protocol ||= 'winrm'
           # Set distro to windows-chef-client-msi
           config[:distro] = "windows-chef-client-msi" if (config[:distro].nil? || config[:distro] == "chef-full")
-          wait_for_access(connect_host, connect_port, protocol)
-          Chef::Log.debug("Restarting Box for Windows Customization to finish.")
-          vm.ShutdownGuest
-          print "Waiting for virtual machine #{vmname} to shut down..."
-          until vm.runtime.powerState == PsOff do
-            sleep 2
-            print "."
+          unless config[:disable_customization]
+            # Wait for customization to complete
+            # TODO: Use logic here
+            puts "Waiting for customization to complete..."
+            sleep 180
+            puts "Customization Complete"
+            sleep 2 until vm.guest.ipAddress
+            connect_host = config[:fqdn] = config[:fqdn] ? get_config(:fqdn) : vm.guest.ipAddress
           end
-          puts "done"
-          vm.PowerOnVM_Task.wait_for_completion
-          puts "Restarted virtual machine #{vmname}"
           wait_for_access(connect_host, connect_port, protocol)
           ssh_override_winrm
           bootstrap_for_windows_node.run
