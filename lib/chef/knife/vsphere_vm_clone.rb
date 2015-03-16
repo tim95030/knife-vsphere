@@ -201,7 +201,7 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
   option :secret_file,
          :long => "--secret-file SECRET_FILE",
          :description => "A file containing the secret key to use to encrypt data bag item values",
-         :default => ''
+         :proc => lambda { |secret_file| Chef::Config[:knife][:secret_file] = secret_file }
 
   option :hint,
          :long => "--hint HINT_NAME[=HINT_FILE]",
