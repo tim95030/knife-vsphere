@@ -43,7 +43,7 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
 
   option :resource_pool,
          long: '--resource-pool POOL',
-         description: 'The resource pool into which to put the cloned VM'
+         description: 'The resource pool or cluster into which to put the cloned VM'
 
   option :source_vm,
          long: '--template TEMPLATE',
@@ -376,8 +376,9 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
     if get_config(:resource_pool)
       rspec = RbVmomi::VIM.VirtualMachineRelocateSpec(pool: find_pool(get_config(:resource_pool)))
     else
-      dc = get_datacenter
+      dc = datacenter
       hosts = find_all_in_folder(dc.hostFolder, RbVmomi::VIM::ComputeResource)
+      fatal_exit('No ComputeResource found - Use --resource-pool to specify a resource pool or a cluster') if hosts.empty?
       rp = hosts.first.resourcePool
       rspec = RbVmomi::VIM.VirtualMachineRelocateSpec(pool: rp)
     end
