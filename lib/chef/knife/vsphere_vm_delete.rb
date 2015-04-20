@@ -13,7 +13,7 @@ require 'chef/api_client'
 
 # Delete a virtual machine from vCenter
 class Chef::Knife::VsphereVmDelete < Chef::Knife::BaseVsphereCommand
-  banner 'knife vsphere vm delete VMNAME'
+  banner 'knife vsphere vm delete VMNAME (options)'
 
   option :purge,
          short: '-P',
@@ -24,7 +24,7 @@ class Chef::Knife::VsphereVmDelete < Chef::Knife::BaseVsphereCommand
   option :chef_node_name,
          short: '-N NAME',
          long: '--node-name NAME',
-         description: 'The Chef node name for your new node'
+         description: 'Use this option if the Chef node name is different from the VM name'
 
   common_options
 
@@ -49,8 +49,6 @@ class Chef::Knife::VsphereVmDelete < Chef::Knife::BaseVsphereCommand
       fatal_exit('You must specify a virtual machine name')
     end
 
-    config[:chef_node_name] = vmname unless get_config(:chef_node_name)
-
     vim_connection
 
     base_folder = find_folder(get_config(:folder))
@@ -58,12 +56,13 @@ class Chef::Knife::VsphereVmDelete < Chef::Knife::BaseVsphereCommand
     vm = traverse_folders_for_vm(base_folder, vmname) || fatal_exit("VM #{vmname} not found")
 
     vm.PowerOffVM_Task.wait_for_completion unless vm.runtime.powerState == 'poweredOff'
-    vm.Destroy_Task
+    vm.Destroy_Task.wait_for_completion
     puts "Deleted virtual machine #{vmname}"
 
     if config[:purge]
-      destroy_item(Chef::Node, config[:chef_node_name], 'node')
-      destroy_item(Chef::ApiClient, config[:chef_node_name], 'client')
+      vmname = config[:chef_node_name] if config[:chef_node_name]
+      destroy_item(Chef::Node, vmname, 'node')
+      destroy_item(Chef::ApiClient, vmname, 'client')
     else
       puts "Corresponding node and client for the #{vmname} server were not deleted and remain registered with the Chef Server"
     end
