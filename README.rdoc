@@ -14,6 +14,7 @@ Listings:
 - Resource Pools and Clusters
 - Customization Specifications
 - Hosts in a Pool or Cluster
+
 VM Operations:
 
 - Power on/off
@@ -93,6 +94,8 @@ Enumerates the customization specifications registered in the target datacenter.
         --cips 192.168.0.99/24,192.168.1.99/24 \
         --chostname NODENAME --cdomain NODEDOMAIN
 
+   --random-vmname - Creates a random VMNAME starts with vm-XXXXXXXX
+   --random-vmname-prefix - Change the VMNAME prefix
    --dest-folder FOLDER - The folder into which to put the cloned VM
    --datastore STORE    - The datastore into which to put the cloned VM
    --datastorecluster STORE - The datastorecluster into which to put the cloned VM
@@ -351,6 +354,16 @@ Lists the ratio between assigned virtual CPUs and physical CPUs on all hosts.
     host4.domain.com: 1.8125
     host5.domain.com: 2.40625
 
+== knife vsphere vlan list
+
+Lists all the VLANs in the datacenter
+
+== knife vsphere vlan create NAME VLAN_ID [--switch DSSWITCH]
+
+Creates a vlan (port group on a distributed virtual switch) with the given name and
+VLAN ID. If you have multiple distributed switches then use the <tt>--switch</tt>
+option to set the switch
+
 = Developing, or using the latest code
 
 The master version of this code may be ahead of the gem itself. If it's in master you
@@ -361,7 +374,14 @@ Ruby gems:
   git clone git@github.com:ezrapagel/knife-vsphere.git # or your fork
   cd knife-vsphere
   rake build                                           # Take note of the version
-  gem install pkg/knife-vsphere-1.0.1.gem              # Use the version above
+  gem install pkg/knife-vsphere-1.1.1.gem              # Use the version above
+
+If you are doing development, then you can run the plugin out of a checked out copy of
+the source:
+
+  bundle install # only needs to be done once
+
+  bundle exec knife vsphere ...
 
 = LICENSE:
 

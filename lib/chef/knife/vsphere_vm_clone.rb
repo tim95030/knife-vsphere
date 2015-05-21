@@ -11,12 +11,14 @@ require 'chef/knife/base_vsphere_command'
 require 'rbvmomi'
 require 'netaddr'
 require 'chef/knife/winrm_base'
+require 'securerandom'
 
 # Clone an existing template into a new VM, optionally applying a customization specification.
 # usage:
 # knife vsphere vm clone NewNode UbuntuTemplate --cspec StaticSpec \
 #     --cips 192.168.0.99/24,192.168.1.99/24 \
 #     --chostname NODENAME --cdomain NODEDOMAIN
+# noinspection RubyResolve
 class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
   banner 'knife vsphere vm clone VMNAME (options)'
   
@@ -214,8 +216,9 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
   option :run_list,
          short: '-r RUN_LIST',
          long: '--run-list RUN_LIST',
-         description: 'Comma separated list of roles/recipes to apply",
-         proc: lambda { |o| o.split(/[\s,]+/) }
+         description: 'Comma separated list of roles/recipes to apply',
+         proc: lambda { |o| o.split(/[\s,]+/) },
+         default: []
 
   option :secret_file,
          long: '--secret-file SECRET_FILE',
@@ -263,14 +266,24 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
          description: 'Indicates whether to mark the new vm as a template',
          boolean: false
 
+  option :random_vmname,
+         long: '--random-vmname',
+         description: 'Creates a random VMNAME starts with vm-XXXXXXXX',
+         boolean: false
+
+  option :random_vmname_prefix,
+         long: '--random-vmname-prefix PREFIX',
+         description: 'Change the VMNAME prefix',
+         default: 'vm-'
+
   def run
     $stdout.sync = true
 
-    vmname = @name_args[0]
-    if vmname.nil?
+    unless using_supplied_hostname? ^ using_random_hostname?
       show_usage
-      fatal_exit('You must specify a virtual machine name')
+      fatal_exit('You must specify a virtual machine name OR use --random-vmname')
     end
+
     config[:chef_node_name] = vmname unless get_config(:chef_node_name)
     config[:vmname] = vmname
 
@@ -305,61 +318,61 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
     end
 
     return if get_config(:mark_as_template)
-    if get_config(:power) || get_config(:bootstrap)
-      vm = find_in_folder(dest_folder, RbVmomi::VIM::VirtualMachine, vmname) ||
-           fatal_exit("VM #{vmname} not found")
-      vm.PowerOnVM_Task.wait_for_completion
-      puts "Powered on virtual machine #{vmname}"
-    end
+    return unless get_config(:power) || get_config(:bootstrap)
 
-    return unless get_config(:bootstrap)
+    vm = find_in_folder(dest_folder, RbVmomi::VIM::VirtualMachine, vmname) ||
+         fatal_exit("VM #{vmname} not found")
+    vm.PowerOnVM_Task.wait_for_completion
+    puts "Powered on virtual machine #{vmname}"
+
     sleep 2 until vm.guest.ipAddress
+
+    connect_host = config[:fqdn] = config[:fqdn] ? get_config(:fqdn) : vm.guest.ipAddress
+    Chef::Log.debug("Connect Host for Bootstrap: #{connect_host}")
+    connect_port = get_config(:ssh_port)
+    protocol = get_config(:bootstrap_protocol)
+    if is_windows?(src_vm.config)
+      protocol ||= 'winrm'
+      # Set distro to windows-chef-client-msi
+      config[:distro] = 'windows-chef-client-msi' if (config[:distro].nil? || config[:distro] == 'chef-full')
+      unless config[:disable_customization]
+        # Wait for customization to complete
+        # TODO: Figure out how to find the customization complete event from the vsphere logs. The
+        #       customization can take up to 10 minutes to complete from what I have seen perhaps
+        #       even longer. For now I am simply sleeping, but if anyone knows how to do this
+        #       better fix it.
+        puts 'Waiting for customization to complete...'
+        sleep 600
+        puts 'Customization Complete'
+        sleep 2 until vm.guest.ipAddress
         connect_host = config[:fqdn] = config[:fqdn] ? get_config(:fqdn) : vm.guest.ipAddress
-        Chef::Log.debug("Connect Host for Bootstrap: #{connect_host}")
-        connect_port = get_config(:ssh_port)
-        protocol = get_config(:bootstrap_protocol)
-        if is_windows?(src_vm.config)
-          protocol ||= 'winrm'
-          # Set distro to windows-chef-client-msi
-          config[:distro] = 'windows-chef-client-msi' if (config[:distro].nil? || config[:distro] == 'chef-full')
-          unless config[:disable_customization]
-            # Wait for customization to complete
-            # TODO: Figure out how to find the customization complete event from the vsphere logs. The 
-            #       customization can take up to 10 minutes to complete from what I have seen perhaps
-            #       even longer. For now I am simply sleeping, but if anyone knows how to do this
-            #       better fix it.
-            puts 'Waiting for customization to complete...'
-            sleep 600
-            puts 'Customization Complete'
-            sleep 2 until vm.guest.ipAddress
-            connect_host = config[:fqdn] = config[:fqdn] ? get_config(:fqdn) : vm.guest.ipAddress
-          end
-          wait_for_access(connect_host, connect_port, protocol)
-          ssh_override_winrm
-          bootstrap_for_windows_node.run
-        else
-          protocol ||= 'ssh'
-          wait_for_access(connect_host, connect_port, protocol)
-          ssh_override_winrm
-          bootstrap_for_node.run
-        end
+      end
+      wait_for_access(connect_host, connect_port, protocol)
+      ssh_override_winrm
+      bootstrap_for_windows_node.run
+    else
+      protocol ||= 'ssh'
+      wait_for_access(connect_host, connect_port, protocol)
+      ssh_override_winrm
+      bootstrap_for_node.run
+    end
   end
 
   def wait_for_access(connect_host, connect_port, protocol)
     if protocol == 'winrm'
       load_winrm_deps
       connect_port = get_config(:winrm_port)
-      print "\n#{ui.color("Waiting for winrm access to become available", :magenta)}"
-      print(".") until tcp_test_winrm(connect_host, connect_port) {
+      print "\n#{ui.color('Waiting for winrm access to become available', :magenta)}"
+      print('.') until tcp_test_winrm(connect_host, connect_port) {
         sleep 10
-        puts("done")
+        puts('done')
       }
     else
-      print "\n#{ui.color("Waiting for sshd access to become available", :magenta)}"
+      print "\n#{ui.color('Waiting for sshd access to become available', :magenta)}"
       #If FreeSSHd, winsshd etc are available
-      print(".") until tcp_test_ssh(connect_host, connect_port) {
+      print('.') until tcp_test_ssh(connect_host, connect_port) {
         sleep 10
-        puts("done")
+        puts('done')
       }
     end
     connect_port
@@ -391,7 +404,6 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
 
   # Builds a CloneSpec
   def generate_clone_spec(src_config)
-    rspec = nil
     if get_config(:resource_pool)
       rspec = RbVmomi::VIM.VirtualMachineRelocateSpec(pool: find_pool(get_config(:resource_pool)))
     else
@@ -502,29 +514,29 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
                    end
         if is_windows?(src_config)
           identification = RbVmomi::VIM.CustomizationIdentification(
-            :joinWorkgroup => cust_spec.identity.identification.joinWorkgroup
+              joinWorkgroup: cust_spec.identity.identification.joinWorkgroup
           )
           licenseFilePrintData = RbVmomi::VIM.CustomizationLicenseFilePrintData(
-            :autoMode => cust_spec.identity.licenseFilePrintData.autoMode
+              autoMode: cust_spec.identity.licenseFilePrintData.autoMode
           )
 
           userData = RbVmomi::VIM.CustomizationUserData(
-            :fullName => cust_spec.identity.userData.fullName,
-            :orgName => cust_spec.identity.userData.orgName,
-            :productId => cust_spec.identity.userData.productId,
-            :computerName => cust_spec.identity.userData.computerName
+            fullName: cust_spec.identity.userData.fullName,
+            orgName: cust_spec.identity.userData.orgName,
+            productId: cust_spec.identity.userData.productId,
+            computerName: cust_spec.identity.userData.computerName
           )
           guiUnattended = RbVmomi::VIM.CustomizationGuiUnattended(
-            :autoLogon => cust_spec.identity.guiUnattended.autoLogon,
-            :autoLogonCount => cust_spec.identity.guiUnattended.autoLogonCount,
-            :password => RbVmomi::VIM.CustomizationPassword(
-              :plainText => cust_spec.identity.guiUnattended.password.plainText,
-              :value => cust_spec.identity.guiUnattended.password.value
+            autoLogon: cust_spec.identity.guiUnattended.autoLogon,
+            autoLogonCount: cust_spec.identity.guiUnattended.autoLogonCount,
+            password: RbVmomi::VIM.CustomizationPassword(
+              plainText: cust_spec.identity.guiUnattended.password.plainText,
+              value: cust_spec.identity.guiUnattended.password.value
             ),
-            :timeZone => cust_spec.identity.guiUnattended.timeZone
+            timeZone: cust_spec.identity.guiUnattended.timeZone
           )
           runonce = RbVmomi::VIM.CustomizationGuiRunOnce(
-            :commandList => ['cust_spec.identity.guiUnattended.commandList']
+            commandList: ['cust_spec.identity.guiUnattended.commandList']
           )
           ident = RbVmomi::VIM.CustomizationSysprep
           ident.guiRunOnce = runonce
@@ -544,7 +556,7 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
           end
           cust_spec.identity = ident
         else
-          ui.error("Customization only supports Linux and Windows currently.")
+          ui.error('Customization only supports Linux and Windows currently.')
           exit 1
         end
       end
@@ -589,7 +601,6 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
   end
 
   # Retrieves a CustomizationSpecItem that matches the supplied name
-  # @param vim [Connection] VI Connection to use
   # @param name [String] name of customization
   # @return [RbVmomi::VIM::CustomizationSpecItem]
   def find_customization(name)
@@ -646,7 +657,7 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
     bootstrap
   end
 
-  def bootstrap_for_windows_node()
+  def bootstrap_for_windows_node
     Chef::Knife::Bootstrap.load_deps
     if get_config(:bootstrap_protocol) == 'winrm' || get_config(:bootstrap_protocol) == nil
       bootstrap = Chef::Knife::BootstrapWindowsWinrm.new
@@ -661,13 +672,13 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
       bootstrap.config[:ssh_password] = get_config(:ssh_password)
       bootstrap.config[:ssh_port] = get_config(:ssh_port)
     else
-      ui.error("Unsupported Bootstrapping Protocol. Supports : winrm, ssh")
+      ui.error('Unsupported Bootstrapping Protocol. Supports : winrm, ssh')
       exit 1
     end
     bootstrap_common_params(bootstrap)
   end
   
-  def bootstrap_for_node()
+  def bootstrap_for_node
     Chef::Knife::Bootstrap.load_deps
     bootstrap = Chef::Knife::Bootstrap.new
     bootstrap.name_args = [config[:fqdn]]
@@ -765,5 +776,27 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
     require 'chef/knife/bootstrap_windows_winrm'
     require 'chef/knife/bootstrap_windows_ssh'
     require 'chef/knife/core/windows_bootstrap_context'
+  end
+  
+  private
+
+  def vmname
+    supplied_hostname || random_hostname
+  end
+
+  def using_random_hostname?
+    config[:random_vmname]
+  end
+
+  def using_supplied_hostname?
+    !supplied_hostname.nil?
+  end
+
+  def supplied_hostname
+    @name_args[0]
+  end
+
+  def random_hostname
+    @random_hostname ||= config[:random_vmname_prefix] + SecureRandom.hex(4)
   end
 end
