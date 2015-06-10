@@ -14,6 +14,7 @@ Listings:
 - Resource Pools and Clusters
 - Customization Specifications
 - Hosts in a Pool or Cluster
+
 VM Operations:
 
 - Power on/off
@@ -47,6 +48,10 @@ For initial development, the plugin targets all communication at a vCenter insta
     knife[:vsphere_user] = "privileged username"
     knife[:vsphere_pass] = "your password"
     knife[:vsphere_dc] = "your-datacenter"
+
+The vSphere password can also be stored in a base64 encoded version (to visually obfuscate it) by prepending 'base64:' to your encoded password. For example:
+
+    knife[:vsphere_pass] = "base64:Zm9vYmFyCg=="
 
 If you get the following error, you may need to disable SSL certificate checking:
 ERROR: OpenSSL::SSL::SSLError: SSL_connect returned=1 errno=0 state=SSLv3 read server certificate B: certificate verify failed
@@ -89,6 +94,8 @@ Enumerates the customization specifications registered in the target datacenter.
         --cips 192.168.0.99/24,192.168.1.99/24 \
         --chostname NODENAME --cdomain NODEDOMAIN
 
+   --random-vmname - Creates a random VMNAME starts with vm-XXXXXXXX
+   --random-vmname-prefix - Change the VMNAME prefix
    --dest-folder FOLDER - The folder into which to put the cloned VM
    --datastore STORE    - The datastore into which to put the cloned VM
    --datastorecluster STORE - The datastorecluster into which to put the cloned VM
@@ -117,9 +124,13 @@ Enumerates the customization specifications registered in the target datacenter.
    --prerelease - Install the pre-release chef gems
    --bootstrap-version VERSION - The version of Chef to install
    --bootstrap-proxy PROXY_URL - The proxy server for the node being bootstrapped
+   --bootstrap-vault-file VAULT_FILE - A JSON file with a list of vault(s) and item(s) to be updated
+   --bootstrap-vault-json VAULT_JSON - A JSON string with the vault(s) and item(s) to be updated
+   --bootstrap-vault-item VAULT_ITEM - A single vault and item to update as "vault:item"
    --distro DISTRO - Bootstrap a distro using a template
    --template-file TEMPLATE - Full path to location of template to use
    --run-list RUN_LIST - Comma separated list of roles/recipes to apply
+   --secret-file SECRET_FILE - A file containing the secret key to use to encrypt data bag item values
    --no-host-key-verify - Disable host key verification
    --json-attributes - A JSON string to be added to the first run of chef-client
    --disable-customization - Disable default customization
@@ -135,13 +146,13 @@ Customization Plugin Example:
       def data=(cplugin_data)
         # Parse your cplugin_data from the format of your choosing.
       end
-    
+
       # optional
       def customize_clone_spec(src_config, clone_spec)
         # Customize the clone spec as you see fit.
         return customized_clone_spec
       end
-    
+
       # optional
       def reconfig_vm(target_vm)
         # Do anything you want in here with the cloned VM.
@@ -223,6 +234,18 @@ Customization Plugin Example:
         "timeZone": "100"
     }
 
+
+The <tt>--bootstrap-vault-*</tt> options can be used to send <tt>chef-vault</tt> items to be updated during the hand-off to <tt>knife bootstrap</tt>.
+
+Example using <tt>--bootstrap-vault-json</tt>:
+
+    knife vsphere vm clone NewNode UbuntuTemplate --cspec StaticSpec \
+        --cips 192.168.0.99/24,192.168.1.99/24 \
+        --chostname NODENAME --cdomain NODEDOMAIN \
+        --start true --bootstrap true \
+        --bootstrap-vault-json '{"passwords":"default","appvault":"credentials"}'
+
+
 == knife vsphere vm toolsconfig PROPERTY VALUE [--empty]
     --empty           - allows clearing string properties
 
@@ -268,7 +291,7 @@ Gets the datastorecluster with the most free space
 
 == knife vsphere vm execute VMNAME COMMAND [ARGUMENTS] --exec-user USER --exec-passwd PASSWD [ --exec-dir DIRECTORY ]
 
-Executes a program on the guest. Requires vCenter 5.0 or higher. 
+Executes a program on the guest. Requires vCenter 5.0 or higher.
 
 Command path must be absolute. For Linux guest operating systems,
 /bin/bash is used to start the program. For Solaris guest operating
@@ -330,6 +353,35 @@ Lists the ratio between assigned virtual CPUs and physical CPUs on all hosts.
     ### Cluster Cluster2 ###
     host4.domain.com: 1.8125
     host5.domain.com: 2.40625
+
+== knife vsphere vlan list
+
+Lists all the VLANs in the datacenter
+
+== knife vsphere vlan create NAME VLAN_ID [--switch DSSWITCH]
+
+Creates a vlan (port group on a distributed virtual switch) with the given name and
+VLAN ID. If you have multiple distributed switches then use the <tt>--switch</tt>
+option to set the switch
+
+= Developing, or using the latest code
+
+The master version of this code may be ahead of the gem itself. If it's in master you
+can generally consider it ready to use. To use master instead of what's published on
+Ruby gems:
+
+  gem uninstall knife-vsphere
+  git clone git@github.com:ezrapagel/knife-vsphere.git # or your fork
+  cd knife-vsphere
+  rake build                                           # Take note of the version
+  gem install pkg/knife-vsphere-1.1.1.gem              # Use the version above
+
+If you are doing development, then you can run the plugin out of a checked out copy of
+the source:
+
+  bundle install # only needs to be done once
+
+  bundle exec knife vsphere ...
 
 = LICENSE:
 
