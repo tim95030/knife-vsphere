@@ -305,9 +305,12 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
           config[:distro] = "windows-chef-client-msi" if (config[:distro].nil? || config[:distro] == "chef-full")
           unless config[:disable_customization]
             # Wait for customization to complete
-            # TODO: Use logic here
+            # TODO: Figure out how to find the customization complete event from the vsphere logs. The 
+            #       customization can take up to 10 minutes to complete from what I have seen perhaps
+            #       even longer. For now I am simply sleeping, but if anyone knows how to do this
+            #       better fix it.
             puts "Waiting for customization to complete..."
-            sleep 180
+            sleep 600
             puts "Customization Complete"
             sleep 2 until vm.guest.ipAddress
             connect_host = config[:fqdn] = config[:fqdn] ? get_config(:fqdn) : vm.guest.ipAddress
