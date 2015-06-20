@@ -325,36 +325,35 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
 
     return unless get_config(:bootstrap)
     sleep 2 until vm.guest.ipAddress
+    
+    connect_host = config[:fqdn] = config[:fqdn] ? get_config(:fqdn) : vm.guest.ipAddress
+    Chef::Log.debug("Connect Host for Bootstrap: #{connect_host}")
+    connect_port = get_config(:ssh_port)
+    protocol = get_config(:bootstrap_protocol)
+    if is_windows?(src_vm.config)
+      protocol ||= 'winrm'
+      # Set distro to windows-chef-client-msi
+      config[:distro] = 'windows-chef-client-msi' if (config[:distro].nil? || config[:distro] == 'chef-full')
+      unless config[:disable_customization]
+        # Wait for customization to complete
+        # TODO: Figure out how to find the customization complete event from the vsphere logs. The
+        #       customization can take up to 10 minutes to complete from what I have seen perhaps
+        #       even longer. For now I am simply sleeping, but if anyone knows how to do this
+        #       better fix it.
+        puts 'Waiting for customization to complete...'
+        sleep 600
+        puts 'Customization Complete'
+        sleep 2 until vm.guest.ipAddress
         connect_host = config[:fqdn] = config[:fqdn] ? get_config(:fqdn) : vm.guest.ipAddress
-        Chef::Log.debug("Connect Host for Bootstrap: #{connect_host}")
-        connect_port = get_config(:ssh_port)
-        protocol = get_config(:bootstrap_protocol)
-        if is_windows?(src_vm.config)
-          protocol ||= 'winrm'
-          # Set distro to windows-chef-client-msi
-          config[:distro] = 'windows-chef-client-msi' if (config[:distro].nil? || config[:distro] == 'chef-full')
-          unless config[:disable_customization]
-            # Wait for customization to complete
-            # TODO: Figure out how to find the customization complete event from the vsphere logs. The 
-            #       customization can take up to 10 minutes to complete from what I have seen perhaps
-            #       even longer. For now I am simply sleeping, but if anyone knows how to do this
-            #       better fix it.
-            puts 'Waiting for customization to complete...'
-            sleep 600
-            puts 'Customization Complete'
-            sleep 2 until vm.guest.ipAddress
-            connect_host = config[:fqdn] = config[:fqdn] ? get_config(:fqdn) : vm.guest.ipAddress
-          end
-          wait_for_access(connect_host, connect_port, protocol)
-          ssh_override_winrm
-          bootstrap_for_windows_node.run
-        else
-          protocol ||= 'ssh'
-          wait_for_access(connect_host, connect_port, protocol)
-          ssh_override_winrm
-          bootstrap_for_node.run
-        end
       end
+      wait_for_access(connect_host, connect_port, protocol)
+      ssh_override_winrm
+      bootstrap_for_windows_node.run
+    else
+      protocol ||= 'ssh'
+      wait_for_access(connect_host, connect_port, protocol)
+      ssh_override_winrm
+      bootstrap_for_node.run
     end
   end
 

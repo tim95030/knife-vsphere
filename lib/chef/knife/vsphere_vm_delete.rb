@@ -51,7 +51,6 @@ class Chef::Knife::VsphereVmDelete < Chef::Knife::BaseVsphereCommand
 
     vim_connection
 
-
     base_folder = find_folder(get_config(:folder))
 
     vm = traverse_folders_for_vm(base_folder, vmname) || fatal_exit("VM #{vmname} not found")
