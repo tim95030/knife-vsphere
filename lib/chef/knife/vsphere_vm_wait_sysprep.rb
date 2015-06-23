@@ -44,7 +44,6 @@ class Chef::Knife::VsphereVmWaitSysprep < Chef::Knife::BaseVsphereCommand
     sleep_timeout = get_config(:timeout).to_i
 
     vim = get_vim_connection
-
     dc = get_datacenter
 
     folder = find_folder(get_config(:folder)) || dc.vmFolder
