@@ -48,29 +48,31 @@ class Chef::Knife::VsphereVmWaitSysprep < Chef::Knife::BaseVsphereCommand
     dc = get_datacenter
 
     folder = find_folder(get_config(:folder)) || dc.vmFolder
-    vm = find_in_folder(folder, RbVmomi::VIM::VirtualMachine, vmname) or abort "VM could not be found in #{dest_folder}"
+    vm = find_in_folder(folder, RbVmomi::VIM::VirtualMachine, vmname) or abort "VM could not be found in #{folder}"
 
     wait_for_sysprep = true
     waited_seconds = 0
 
+    print 'Waiting for sysprep...'
     while wait_for_sysprep do
-      events = queryCustomizationSucceeded(vm, vem)
+      events = query_customization_succeeded(vm, vem)
 
       if events.size > 0
         events.each do |e|
-          puts e.fullFormattedMessage
+          puts "\n#{e.fullFormattedMessage}"
         end
         wait_for_sysprep = false
       elsif waited_seconds >= sleep_timeout
-        abort "Customization of VM #{vmname} not succeeded within #{sleep_timeout} seconds."
+        abort "\nCustomization of VM #{vmname} not succeeded within #{sleep_timeout} seconds."
       else
+        print '.'
         sleep(sleep_time)
         waited_seconds += sleep_time
       end
     end
   end
 
-  def queryCustomizationSucceeded(vm, vem)
+  def query_customization_succeeded(vm, vem)
     vem.QueryEvents(
         :filter =>
             RbVmomi::VIM::EventFilterSpec(
