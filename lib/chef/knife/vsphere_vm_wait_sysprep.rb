@@ -21,13 +21,13 @@ class Chef::Knife::VsphereVmWaitSysprep < Chef::Knife::BaseVsphereCommand
 
   option :sleep,
          long: '--sleep TIME',
-         description: 'The time in seconds to wait between queries for CustomizationSucceeded event. Default: 60 seconds',
-         default: 60
+      description: 'The time in seconds to wait between queries for CustomizationSucceeded event. Default: 60 seconds',
+      default: 60
 
   option :timeout,
          long: '--timeout TIME',
-         description: 'The timeout in seconds before aborting. Default: 300 seconds',
-         default: 300
+      description: 'The timeout in seconds before aborting. Default: 300 seconds',
+      default: 300
 
   def run
     $stdout.sync = true
