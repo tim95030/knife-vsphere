@@ -13,6 +13,7 @@ require 'rbvmomi'
 # knife vsphere vm wait sysprep somemachine --sleep 30 \
 #     --timeout 600
 class Chef::Knife::VsphereVmWaitSysprep < Chef::Knife::BaseVsphereCommand
+  include CustomizationHelper
 
   banner "knife vsphere vm wait sysprep VMNAME (options)"
 
@@ -43,47 +44,13 @@ class Chef::Knife::VsphereVmWaitSysprep < Chef::Knife::BaseVsphereCommand
     sleep_timeout = get_config(:timeout).to_i
 
     vim = get_vim_connection
-    vem = vim.serviceContent.eventManager
 
     dc = get_datacenter
 
     folder = find_folder(get_config(:folder)) || dc.vmFolder
     vm = find_in_folder(folder, RbVmomi::VIM::VirtualMachine, vmname) or abort "VM could not be found in #{folder}"
 
-    wait_for_sysprep = true
-    waited_seconds = 0
-
-    print 'Waiting for sysprep...'
-    while wait_for_sysprep do
-      events = query_customization_succeeded(vm, vem)
-
-      if events.size > 0
-        events.each do |e|
-          puts "\n#{e.fullFormattedMessage}"
-        end
-        wait_for_sysprep = false
-      elsif waited_seconds >= sleep_timeout
-        abort "\nCustomization of VM #{vmname} not succeeded within #{sleep_timeout} seconds."
-      else
-        print '.'
-        sleep(sleep_time)
-        waited_seconds += sleep_time
-      end
-    end
-  end
-
-  def query_customization_succeeded(vm, vem)
-    vem.QueryEvents(
-        :filter =>
-            RbVmomi::VIM::EventFilterSpec(
-                :entity =>
-                    RbVmomi::VIM::EventFilterSpecByEntity(
-                        :entity => vm,
-                        :recursion => RbVmomi::VIM::EventFilterSpecRecursionOption(:self)
-                    ),
-                :eventTypeId => ['CustomizationSucceeded']
-            )
-    )
+    CustomizationHelper.wait_for_sysprep(vm, vim, sleep_timeout, sleep_time)
   end
 
 end
