@@ -275,6 +275,16 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
          description: 'Change the VMNAME prefix',
          default: 'vm-'
 
+  option :sysprep_sleep,
+         long: '--sleep TIME',
+         description: 'The time in seconds to wait between queries for CustomizationSucceeded event. Default: 60 seconds',
+         default: 60
+
+  option :sysprep_timeout,
+         long: '--timeout TIME',
+         description: 'The\ timeout in seconds before aborting. Default: 600 seconds',
+         default: 600
+
   def run
     $stdout.sync = true
 
@@ -336,13 +346,26 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
       # Set distro to windows-chef-client-msi
       config[:distro] = 'windows-chef-client-msi' if config[:distro].nil? || config[:distro] == 'chef-full'
       unless config[:disable_customization]
-        # Wait for customization to complete
-        # TODO: Figure out how to find the customization complete event from the vsphere logs. The
-        #       customization can take up to 10 minutes to complete from what I have seen perhaps
-        #       even longer. For now I am simply sleeping, but if anyone knows how to do this
-        #       better fix it.
         puts 'Waiting for customization to complete...'
-        sleep 600
+        sleep_time = get_config(:sysprep_sleep).to_i
+        sleep_timeout = get_config(:sysprep_timeout).to_i
+        wait_for_sysprep = true
+        waited_seconds = 0
+        while wait_for_sysprep do
+          events = query_customization_succeeded(vm, vim.serviceContent.eventManager)
+          if events.size > 0
+            events.each do |e|
+              puts "\n#{e.fullFormattedMessage}"
+            end
+            wait_for_sysprep = false
+          elsif waited_seconds >= sleep_timeout
+            abort "\nCustomization of VM #{vmname} did not complete withing #{sleep_timeout} seconds"
+          else
+            print '.'
+            sleep(sleep_time)
+            waited_seconds += sleep_time
+          end
+        end
         puts 'Customization Complete'
         sleep 2 until vm.guest.ipAddress
         connect_host = config[:fqdn] = config[:fqdn] ? get_config(:fqdn) : vm.guest.ipAddress
@@ -824,5 +847,17 @@ class Chef::Knife::VsphereVmClone < Chef::Knife::BaseVsphereCommand
 
   def random_hostname
     @random_hostname ||= config[:random_vmname_prefix] + SecureRandom.hex(4)
+  end
+
+  def query_customization_succeeded(vm, vem)
+    vem.QueryEvents(
+        filter: RbVmomi::VIM::EventFilterSpec(
+            entity: RbVmomi::VIM::EventFilterSpecByEntity(
+                entity: vm,
+                recursion: RbVmomi::VIM::EventFilterSpecRecursionOption(:self)
+            ),
+            eventTypeId: ['CustomizationSucceeded']
+        )
+    )
   end
 end
