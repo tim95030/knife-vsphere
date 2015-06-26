@@ -15,19 +15,19 @@ require 'rbvmomi'
 class Chef::Knife::VsphereVmWaitSysprep < Chef::Knife::BaseVsphereCommand
   include CustomizationHelper
 
-  banner "knife vsphere vm wait sysprep VMNAME (options)"
+  banner 'knife vsphere vm wait sysprep VMNAME (options)'
 
   get_common_options
 
   option :sleep,
-         :long => "--sleep TIME",
-         :description => "The time in seconds to wait between queries for CustomizationSucceeded event. Default: 60 seconds",
-         :default => 60
+         long: '--sleep TIME',
+         description: 'The time in seconds to wait between queries for CustomizationSucceeded event. Default: 60 seconds',
+         default: 60
 
   option :timeout,
-         :long => "--timeout TIME",
-         :description => "The timeout in seconds before aborting. Default: 300 seconds",
-         :default => 300
+         long: '--timeout TIME',
+         description: 'The timeout in seconds before aborting. Default: 300 seconds',
+         default: 300
 
   def run
     $stdout.sync = true
@@ -35,7 +35,7 @@ class Chef::Knife::VsphereVmWaitSysprep < Chef::Knife::BaseVsphereCommand
     vmname = @name_args[0]
     if vmname.nil?
       show_usage
-      fatal_exit("You must specify a virtual machine name")
+      fatal_exit('You must specify a virtual machine name')
     end
 
     config[:vmname] = vmname
@@ -48,9 +48,8 @@ class Chef::Knife::VsphereVmWaitSysprep < Chef::Knife::BaseVsphereCommand
     dc = get_datacenter
 
     folder = find_folder(get_config(:folder)) || dc.vmFolder
-    vm = find_in_folder(folder, RbVmomi::VIM::VirtualMachine, vmname) or abort "VM could not be found in #{folder}"
+    vm = find_in_folder(folder, RbVmomi::VIM::VirtualMachine, vmname) || abort("VM could not be found in #{folder}")
 
     CustomizationHelper.wait_for_sysprep(vm, vim, sleep_timeout, sleep_time)
   end
-
 end

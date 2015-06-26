@@ -3,15 +3,17 @@
 # License:: Apache License, Version 2.0
 #
 
+require 'rbvmomi'
+
 module CustomizationHelper
-  def CustomizationHelper.wait_for_sysprep(vm, vim_connection, timeout, sleep_time)
+  def self.wait_for_sysprep(vm, vim_connection, timeout, sleep_time)
     vem = vim_connection.serviceContent.eventManager
 
     wait = true
     waited_seconds = 0
 
     print 'Waiting for sysprep...'
-    while wait do
+    while wait
       events = query_customization_succeeded(vm, vem)
 
       if events.size > 0
@@ -29,17 +31,10 @@ module CustomizationHelper
     end
   end
 
-  def CustomizationHelper.query_customization_succeeded(vm, vem)
-    vem.QueryEvents(
-        :filter =>
-            RbVmomi::VIM::EventFilterSpec(
-                :entity =>
-                    RbVmomi::VIM::EventFilterSpecByEntity(
-                        :entity => vm,
-                        :recursion => RbVmomi::VIM::EventFilterSpecRecursionOption(:self)
-                    ),
-                :eventTypeId => ['CustomizationSucceeded']
-            )
-    )
+  def self.query_customization_succeeded(vm, vem)
+    vem.QueryEvents(filter:
+        RbVmomi::VIM::EventFilterSpec(entity:
+        RbVmomi::VIM::EventFilterSpecByEntity(entity: vm, recursion:
+        RbVmomi::VIM::EventFilterSpecRecursionOption(:self)), eventTypeId: ['CustomizationSucceeded']))
   end
 end
